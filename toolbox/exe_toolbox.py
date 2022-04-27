@@ -1,4 +1,3 @@
-
 import numpy as np
 from general_robotics_toolbox import *
 from pandas import read_csv

@@ -10,10 +10,17 @@ def calc_lam_js(curve_js,robot):
 	lam=[0]
 	curve=[]
 	for i in range(len(curve_js)):
-	    robot_pose=robot.fwd(curve_js[i])
-	    curve.append(robot_pose.p)
-	    if i>0:
-	        lam.append(lam[-1]+np.linalg.norm(curve[i]-curve[i-1]))
+		robot_pose=robot.fwd(curve_js[i])
+		curve.append(robot_pose.p)
+		if i>0:
+			lam.append(lam[-1]+np.linalg.norm(curve[i]-curve[i-1]))
+	return np.array(lam)
+
+def calc_lam_js_2arm(curve_js1,curve_js2,robot1,robot2,base2_R,base2_p):
+	curve=[]
+	for i in range(len(curve_js1)):
+		curve.append(robot1.fwd(curve_js1[i]).p-robot2.fwd(curve_js2[i],base2_R,base2_p).p)
+	lam=calc_lam_cs(curve)
 	return np.array(lam)
 
 def calc_lam_cs(curve):
@@ -58,6 +65,27 @@ def calc_lamdot(curve_js,lam,robot,step):
 
 	dlam_max1=np.min(np.divide(robot.joint_vel_limit,np.abs(dqdlam)),axis=1)
 	dlam_max2=np.sqrt(np.min(np.divide(robot.joint_acc_limit,np.abs(d2qdlam2)),axis=1))
+
+	dlam_max_act=np.minimum(dlam_max1,dlam_max2)
+
+	return dlam_max_act
+def calc_lamdot_2arm(curve_js,lam,robot1,robot2,step):
+	############find maximum lambda dot vs lambda
+	###curve_js: curve expressed in joint space in radians
+	###lam: discrete lambda (path length), same shape as curve_js, from 0 to 1
+	###robot: joint velocity & acc limit 
+	###step: step size used for dense curve
+
+	curve_js=curve_js[::step]
+	lam=lam[::step]
+	dq=np.gradient(curve_js,axis=0)
+	dlam=np.gradient(lam)
+	dqdlam=np.divide(dq.T,dlam).T
+
+	d2qdlam2=np.divide(np.gradient(dqdlam,axis=0).T,dlam).T
+
+	dlam_max1=np.min(np.divide(np.hstack((robot1.joint_vel_limit,robot2.joint_vel_limit)),np.abs(dqdlam)),axis=1)
+	dlam_max2=np.sqrt(np.min(np.divide(np.hstack((robot1.joint_acc_limit,robot2.joint_acc_limit)),np.abs(d2qdlam2)),axis=1))
 
 	dlam_max_act=np.minimum(dlam_max1,dlam_max2)
 
@@ -192,18 +220,9 @@ def calc_lamdot_dual(curve_js1,curve_js2,lam,joint_vel_limit1,joint_vel_limit2,s
 def main():
 	robot=abb6640(d=50)
 
-	# col_names=['x', 'y', 'z','R1','R2','R3','R4','R5','R6','R7','R8','R9'] 
-	# data = read_csv("../greedy_fitting/curve_fit_backproj.csv")
-	col_names=['X', 'Y', 'Z','direction_x', 'direction_y', 'direction_z'] 
-	data = read_csv("../data/movel/Curve_in_base_frame.csv", names=col_names)
-	curve_x=data['X'].tolist()
-	curve_y=data['Y'].tolist()
-	curve_z=data['Z'].tolist()
-	curve=np.vstack((curve_x, curve_y, curve_z)).T
-	# print(curve)
-
 	col_names=['q1', 'q2', 'q3','q4', 'q5', 'q6'] 
-	data = read_csv("../data/movel/Curve_js.csv", names=col_names)
+	# data = read_csv("../data/from_NX/Curve_js.csv", names=col_names)
+	data = read_csv("../data/from_ge/Curve_js2.csv", names=col_names)
 	# data = read_csv("qsol.csv", names=col_names)
 	# data = read_csv("../constraint_solver/single_arm/trajectory/all_theta_opt/all_theta_opt_js.csv", names=col_names)
 	curve_q1=data['q1'].tolist()
@@ -216,7 +235,7 @@ def main():
 	# lam=calc_lam_cs(curve)
 	lam=calc_lam_js(curve_js,robot)
 	
-	step=1
+	step=1000
 	lam_dot=calc_lamdot(curve_js,lam,robot,step)
 	plt.plot(lam[::step],lam_dot)
 	plt.xlabel('path length (mm)')
@@ -224,5 +243,44 @@ def main():
 	plt.title('lambda_dot vs lambda')
 	plt.show()
 
+def main2():
+	robot1=abb1200(d=50)
+	robot2=abb6640()
+	###read actual curve
+	col_names=['q1', 'q2', 'q3','q4', 'q5', 'q6'] 
+	data = read_csv("../constraint_solver/dual_arm/trajectory/arm1.csv", names=col_names)
+	curve_q1=data['q1'].tolist()
+	curve_q2=data['q2'].tolist()
+	curve_q3=data['q3'].tolist()
+	curve_q4=data['q4'].tolist()
+	curve_q5=data['q5'].tolist()
+	curve_q6=data['q6'].tolist()
+	curve_js1=np.vstack((curve_q1, curve_q2, curve_q3,curve_q4,curve_q5,curve_q6)).T
+
+	col_names=['q1', 'q2', 'q3','q4', 'q5', 'q6'] 
+	data = read_csv("../constraint_solver/dual_arm/trajectory/arm2.csv", names=col_names)
+	curve_q1=data['q1'].tolist()
+	curve_q2=data['q2'].tolist()
+	curve_q3=data['q3'].tolist()
+	curve_q4=data['q4'].tolist()
+	curve_q5=data['q5'].tolist()
+	curve_q6=data['q6'].tolist()
+	curve_js2=np.vstack((curve_q1, curve_q2, curve_q3,curve_q4,curve_q5,curve_q6)).T
+
+	base2_R=np.array([[-1,0,0],[0,-1,0],[0,0,1]])
+	base2_p=np.array([3000,1000,0])
+	
+	step_size=1000
+	lam=calc_lam_js_2arm(curve_js1[::step_size],curve_js2[::step_size],robot1,robot2,base2_R,base2_p)
+
+	lam_dot=calc_lamdot_2arm(np.hstack((curve_js1[::step_size],curve_js2[::step_size])),lam,robot1,robot2,1)
+	plt.plot(lam,lam_dot)
+	plt.xlabel('path length (mm)')
+	plt.ylabel('max lambda_dot')
+	plt.title('lambda_dot vs lambda')
+	plt.show()
+
+
+
 if __name__ == "__main__":
-	main()
+	main2()
