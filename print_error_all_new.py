@@ -13,18 +13,19 @@ from utils import *
 
 robot=abb6640(d=50)
 
+dataset='movec'
 
 ###read in original curve
-curve = read_csv('data/movec/Curve_in_base_frame.csv',header=None).values
-curve_js = read_csv('data/movec/Curve_js.csv',header=None).values
+curve = read_csv('data/'+dataset+'/Curve_in_base_frame.csv',header=None).values
+curve_js = read_csv('data/'+dataset+'/Curve_js.csv',header=None).values
 
 ###get breakpoints location
-data = read_csv('data/movec/command.csv')
+data = read_csv('data/'+dataset+'/command.csv')
 breakpoints=np.array(data['breakpoints'].tolist())
 breakpoints[1:]=breakpoints[1:]-1
 
 
-data_dir='execution/movec/'
+data_dir='execution/'+dataset+'/'
 speed={'v50':v50,'v100':v100,'v200':v200,'v400':v400}
 zone={'z10':z10,'z1':z1}#,'z5':z5,'z1':z1,'fine':fine}
 for s in speed:
@@ -42,14 +43,19 @@ for s in speed:
 		start_idx=np.where(cmd_num==3)[0][0]
 		curve_exe_js=np.radians(np.vstack((q1,q2,q3,q4,q5,q6)).T.astype(float)[start_idx:])
 		timestamp=np.array(data['timestamp'].tolist()[start_idx:]).astype(float)
+		timestep=np.average(timestamp[1:]-timestamp[:-1])
 
 		###get cartesian info
 		curve_exe=[]
 		curve_exe_R=[]
+		act_speed=[]
+
 		for i in range(len(curve_exe_js)):
-		    robot_pose=robot.fwd(curve_exe_js[i])
-		    curve_exe.append(robot_pose.p)
-		    curve_exe_R.append(robot_pose.R)
+			robot_pose=robot.fwd(curve_exe_js[i])
+			curve_exe.append(robot_pose.p)
+			curve_exe_R.append(robot_pose.R)
+			if i>0:
+				act_speed.append(np.linalg.norm(curve_exe[-1]-curve_exe[-2])/timestep)
 		curve_exe=np.array(curve_exe)
 		curve_exe_R=np.array(curve_exe_R)
 		lam=calc_lam_cs(curve_exe)
@@ -64,13 +70,19 @@ for s in speed:
 		ax.plot3D(curve_exe[:,0], curve_exe[:,1],curve_exe[:,2], 'green',label='execution')
 		
 
-		##TODO: add error vs lambda
-		# error=calc_all_error(curve_exe,curve)
 		error,angle_error=calc_all_error_w_normal(curve_exe,curve[:,:3],curve_exe_R[:,:,-1],curve[:,3:])
-		plt.figure()
-		plt.plot(lam,error,label='cartesian error')
-		plt.plot(lam,np.degrees(angle_error),label='normal error')
-		plt.legend()
-		plt.title('error vs lambda'+' '+s+' '+z)
+		fig, ax1 = plt.subplots()
+		ax2 = ax1.twinx()
+		ax1.plot(lam[1:],act_speed, 'g-', label='Speed')
+		ax2.plot(lam, error, 'b-',label='Cartesian Error')
+		ax2.plot(lam, np.degrees(angle_error), 'y-',label='Normal Error')
+		ax1.legend(loc=0)
+		ax2.legend(loc=0)
+		ax1.set_xlabel('lambda (mm)')
+		ax1.set_ylabel('Speed/lamdot (mm/s)', color='g')
+		ax2.set_ylabel('Error (mm/deg)', color='b')
+		ax2.set_ylim(0,1)
+
+		plt.title(dataset+' error vs lambda'+' '+s+' '+z)
 		plt.show()
 		
