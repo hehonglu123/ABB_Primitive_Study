@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from pandas import *
 from general_robotics_toolbox import *
 from toolbox_circular_fit import *
-sys.path.append('../toolbox')
+sys.path.append('../../toolbox')
 from utils import *
 from robots_def import *
 from exe_toolbox import *
@@ -22,7 +22,7 @@ def visualize(curve,curve_normal):
 
 	plt.show()
 
-dataset='movec+movel_smooth'
+# dataset='movec+movel_smooth'
 
 robot=abb6640(d=50)
 ###generate a continuous arc, with linear orientation
@@ -77,9 +77,9 @@ print(curve[-1])
 print(R2q(R_all[-1]))
 print(quadrant(curve_js[-1]))
 # ###########save to csv####################
-df=DataFrame({'breakpoints':np.array([0,2500,5000]),'primitives':['movej_fit','movec_fit','movel_fit'],'points':np.array([[q_init],[mid_p,end_p],[curve[-1]]])})
-df.to_csv(dataset+'/command.csv',header=True,index=False)
+df=DataFrame({'breakpoints':np.array([0,2500,5000]),'primitives':['movej_fit','movec_fit','movel_fit'],'points':[[q_init],[mid_p,end_p],[curve[-1]]]})
+df.to_csv('command.csv',header=True,index=False)
 
 df=DataFrame({'x':curve[:,0],'y':curve[:,1], 'z':curve[:,2],'x_dir':R_all[:,0,-1],'y_dir':R_all[:,1,-1], 'z_dir':R_all[:,2,-1]})
-df.to_csv(dataset+'/Curve_in_base_frame.csv',header=False,index=False)
-DataFrame(curve_js).to_csv(dataset+'/Curve_js.csv',header=False,index=False)
+df.to_csv('Curve_in_base_frame.csv',header=False,index=False)
+DataFrame(curve_js).to_csv('Curve_js.csv',header=False,index=False)

@@ -141,10 +141,10 @@ def exe_from_file(ms,filename,filename_js,speed,zone):
 
 def main():
     ms = MotionSend()
-    dataset='movec+movel_smooth'
+    dataset='movec_smooth'
     vmax = speeddata(10000,9999999,9999999,999999)
-    speed={'vmax':vmax,'v50':v50,'v100':v100,'v200':v200,'v400':v400}
-    zone={'z10':z10,'z5':z5,'z1':z1,'fine':fine}
+    speed={'v50':v50,'v300':v300,'v500':v500,'v1000':v1000,'vmax':vmax}
+    zone={'z20':z20,'z10':z10,'z1':z1,'fine':fine}
 
     for s in speed:
         for z in zone: 
