@@ -141,19 +141,20 @@ def exe_from_file(ms,filename,filename_js,speed,zone):
 
 def main():
     ms = MotionSend()
-    dataset='movec_smooth'
+    datasets=['movec','movec_smooth','movec+movel_smooth','movel_smooth']
     vmax = speeddata(10000,9999999,9999999,999999)
-    speed={'v50':v50,'v300':v300,'v500':v500,'v1000':v1000,'vmax':vmax}
+    speed={'v50':v50,'v300':v300,'v500':v500,'v1000':v1000,'v1500':v1500,'vmax':vmax}
     zone={'z20':z20,'z10':z10,'z1':z1,'fine':fine}
 
-    for s in speed:
-        for z in zone: 
-            curve_exe_js=exe_from_file(ms,'../data/'+dataset+"/command.csv",'../data/'+dataset+"/Curve_js.csv",speed[s],zone[z])
-   
+    for dataset in datasets:
+        for s in speed:
+            for z in zone: 
+                curve_exe_js=exe_from_file(ms,'../data/'+dataset+"/command.csv",'../data/'+dataset+"/Curve_js.csv",speed[s],zone[z])
+       
 
-            f = open(dataset+"/curve_exe"+"_"+s+"_"+z+".csv", "w")
-            f.write(curve_exe_js)
-            f.close()
+                f = open(dataset+"/curve_exe"+"_"+s+"_"+z+".csv", "w")
+                f.write(curve_exe_js)
+                f.close()
 
 if __name__ == "__main__":
     main()
