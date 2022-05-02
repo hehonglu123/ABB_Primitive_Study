@@ -13,7 +13,7 @@ from utils import *
 
 robot=abb6640(d=50)
 
-dataset='movel_smooth'
+dataset='movec_30_car'
 
 ###read in original curve
 curve = read_csv('data/'+dataset+'/Curve_in_base_frame.csv',header=None).values
@@ -40,7 +40,7 @@ for s in speed:
 		q5=data['J5'].tolist()[1:]
 		q6=data['J6'].tolist()[1:]
 		cmd_num=np.array(data['cmd_num'].tolist()[1:]).astype(float)
-		start_idx=np.where(cmd_num==3)[0][0]
+		start_idx=np.where(cmd_num==4)[0][0]
 		curve_exe_js=np.radians(np.vstack((q1,q2,q3,q4,q5,q6)).T.astype(float)[start_idx:])
 		timestamp=np.array(data['timestamp'].tolist()[start_idx:]).astype(float)
 		timestep=np.average(timestamp[1:]-timestamp[:-1])

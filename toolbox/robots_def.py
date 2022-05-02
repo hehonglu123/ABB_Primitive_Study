@@ -264,9 +264,10 @@ def jdot(q,qdot):
 	return Jdotmat[-1]
 
 def main():
-	p_tool=np.array([0.45,0,-0.05])*1000.
-	R_tool=R_tool=Ry(np.radians(120))
-	print(p_tool+np.dot(R_tool,np.array([0,0,50])))
+	robot=abb6640(d=50)
+	inv_sol=robot.inv([2200,500, 1000],Ry(np.radians(135)))
+	print(inv_sol)
+	print(np.degrees(inv_sol[1]))
 	return
 
 if __name__ == '__main__':
