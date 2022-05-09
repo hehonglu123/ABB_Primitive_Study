@@ -13,7 +13,7 @@ from utils import *
 
 robot=abb6640(d=50)
 
-dataset='movel_30_ori'
+dataset='movel_30_car'
 
 ###read in original curve
 curve = read_csv('data/'+dataset+'/Curve_in_base_frame.csv',header=None).values
@@ -26,21 +26,20 @@ breakpoints[1:]=breakpoints[1:]-1
 
 
 data_dir='execution/'+dataset+'/'
-speed={'v1000':v1000}
+speed={'v500':v500}
 # speed={'v50':v50,'v300':v300,'v500':v500,'v1000':v1000,'vmax':vmax}
 zone={'z20':z20,'z10':z10,'z1':z1}#,'z5':z5,'z1':z1,'fine':fine}
 for s in speed:
 	for z in zone:
 		###read in recorded joint data
-		col_names=['timestamp', 'cmd_num', 'J1', 'J2','J3', 'J4', 'J5', 'J6'] 
-		data = read_csv(data_dir+"curve_exe_"+s+'_'+z+".csv",names=col_names)
-		q1=data['J1'].tolist()[1:]
-		q2=data['J2'].tolist()[1:]
-		q3=data['J3'].tolist()[1:]
-		q4=data['J4'].tolist()[1:]
-		q5=data['J5'].tolist()[1:]
-		q6=data['J6'].tolist()[1:]
-		cmd_num=np.array(data['cmd_num'].tolist()[1:]).astype(float)
+		data=read_csv('execution/'+dataset+'/curve_exe_v500_z10.csv')
+		q1=data[' J1'].tolist()
+		q2=data[' J2'].tolist()
+		q3=data[' J3'].tolist()
+		q4=data[' J4'].tolist()
+		q5=data[' J5'].tolist()
+		q6=data[' J6'].tolist()
+		cmd_num=np.array(data[' cmd_num'].tolist()).astype(float)
 		start_idx=np.where(cmd_num==4)[0][0]
 		curve_exe_js=np.radians(np.vstack((q1,q2,q3,q4,q5,q6)).T.astype(float)[start_idx:])
 		timestamp=np.array(data['timestamp'].tolist()[start_idx:]).astype(float)

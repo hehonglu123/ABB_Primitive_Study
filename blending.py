@@ -6,7 +6,7 @@ from toolbox_circular_fit import *
 from abb_motion_program_exec_client import *
 from robots_def import *
 import matplotlib.pyplot as plt
-from scipy.interpolate import UnivariateSpline
+from scipy.interpolate import UnivariateSpline, BPoly
 from lambda_calc import *
 
 def blend_cs(q,curve,breakpoints,lam,primitives,robot,N=10):
@@ -276,24 +276,18 @@ def blend_js_from_primitive(q,curve,breakpoints,lam,primitives,robot,N=10):
 
 	return lam_blended,q_blended
 
-def blend_js(q,breakpoints,lam):
+def blend_js(q,breakpoints,lam,blending_num=100):
 	#q: 			full 50,000 joints
 	#breakpoints:	breakpoints
 	#lam: 			path length
 	##return
 	#q_blended: 	blended trajectory with movej
-	#merged_idx: 	merged blending if breakpoints too close
-	#spl_list: list of spline coeff at each breakpoint
 
-	blending=200###overestimated blending
 	q_blended=copy.deepcopy(q)
 	skip=False
-
-
-	spl_list=[]
 	merged_idx=[]
+
 	for i in range(1,len(breakpoints)-1):
-		spl_list_q=[]
 		if skip:
 			merged_idx[-1].append(breakpoints[i])
 			skip=False
@@ -301,38 +295,25 @@ def blend_js(q,breakpoints,lam):
 
 		merged_idx.append([breakpoints[i]])
 
-
-		start_idx1	=breakpoints[i]-2*blending
-		end_idx1	=breakpoints[i]-blending
-		start_idx2	=breakpoints[i]+blending
-		end_idx2	=breakpoints[i]+2*blending
+		start_idx	=breakpoints[i]-blending_num
+		end_idx	=breakpoints[i]+blending_num
 
 		if i+1<len(breakpoints):
-			if breakpoints[i+1]-breakpoints[i]<2*blending:
+			if breakpoints[i+1]-breakpoints[i]<2*blending_num:
 				skip=True
-				start_idx1	=breakpoints[i]-blending
-				end_idx1	=breakpoints[i]-1
-				start_idx2	=breakpoints[i+1]+1
-				end_idx2	=breakpoints[i+1]+blending
+				start_idx	=breakpoints[i]-blending_num
+				end_idx	=breakpoints[i+1]+blending_num
 
 		for j in range(len(q[0])):
-			spl = UnivariateSpline(np.hstack((lam[start_idx1:end_idx1],lam[start_idx2:end_idx2])),np.hstack((q[start_idx1:end_idx1,j],q[start_idx2:end_idx2,j])),k=5)
-			# q_blended[end_idx1:start_idx2,j]=spl(lam[end_idx1:start_idx2])
-
-			poly = np.polyfit(np.hstack((lam[start_idx1:end_idx1],lam[start_idx2:end_idx2])),np.hstack((q[start_idx1:end_idx1,j],q[start_idx2:end_idx2,j])),deg=30)
-			q_blended[end_idx1:start_idx2,j]=np.poly1d(poly)(lam[end_idx1:start_idx2])
-
-			spl_list_q.append(spl)
-		spl_list.append(spl_list_q)
-
-	spl_list=np.array(spl_list)
-	return q_blended, spl_list, merged_idx
+			poly = BPoly.from_derivatives([lam[start_idx],lam[end_idx]], [[q[start_idx,j],(q[start_idx,j]-q[start_idx-1,j])/(lam[start_idx]-lam[start_idx-1])], [q[end_idx,j],(q[end_idx+1,j]-q[end_idx,j])/(lam[end_idx+1]-lam[end_idx])]])
+			q_blended[start_idx:end_idx,j]=poly(lam[start_idx:end_idx])
 
 
+	return q_blended
 
-def main():
+def blend_exe():
 	robot=abb6640(d=50)
-	data_set='movel2_30_car/'
+	data_set='movel_30_car/'
 
 	data = read_csv('data/'+data_set+'command.csv')
 	breakpoints=np.array(data['breakpoints'].tolist())
@@ -361,25 +342,101 @@ def main():
 	lam_act=[0]
 	curve_exe=[]
 	for i in range(len(curve_exe_js)):
-	    robot_pose=robot.fwd(curve_exe_js[i])
-	    curve_exe.append(robot_pose.p)
-	    if i>0:
-	        lam_act.append(lam_act[-1]+np.linalg.norm(curve_exe[i]-curve_exe[i-1]))
-	    try:
-	        if timestamp[i-1]!=timestamp[i] and np.linalg.norm(curve_exe[-1]-curve_exe[-2])!=0:
-	            act_speed.append(np.linalg.norm(curve_exe[-1]-curve_exe[-2])/(timestamp[i]-timestamp[i-1]))
-	        else:
-	        	act_speed.append(act_speed[-1])
-	            
-	    except IndexError:
-	        pass
+		robot_pose=robot.fwd(curve_exe_js[i])
+		curve_exe.append(robot_pose.p)
+		if i>0:
+			lam_act.append(lam_act[-1]+np.linalg.norm(curve_exe[i]-curve_exe[i-1]))
+		try:
+			if timestamp[i-1]!=timestamp[i] and np.linalg.norm(curve_exe[-1]-curve_exe[-2])!=0:
+				act_speed.append(np.linalg.norm(curve_exe[-1]-curve_exe[-2])/(timestamp[i]-timestamp[i-1]))
+			else:
+				act_speed.append(act_speed[-1])
+				
+		except IndexError:
+			pass
+	curve_exe=np.array(curve_exe)
+
+	lam=calc_lam_js(curve_js,robot)
+	lam_exe=calc_lam_cs(curve_exe)
+
+	bp_exe=np.argmin(np.abs(lam_exe-lam[breakpoints[1]]))
+
+	curve_blend_js=blend_js(curve_exe_js,[0,bp_exe,len(curve_exe_js)],lam_exe,4)
+
+	curve_blend=[]
+	for i in range(len(curve_blend_js)):
+		curve_blend.append(robot.fwd(curve_blend_js[i]).p)
+	curve_blend=np.array(curve_blend)
+
+
+	###plot curves
+	for i in range(6):
+		plt.figure(i)
+		plt.plot(lam,curve_js[:,i],label='original')
+		plt.plot(lam_exe,curve_exe_js[:,i],label='execution')
+		plt.plot(lam_exe,curve_blend_js[:,i],label='Blended J')
+		plt.title('J'+str(i+1))
+		plt.legend()
+
+	###plot original curve
+	plt.figure()
+	ax = plt.axes(projection='3d')
+	ax.plot3D(curve[:,0], curve[:,1],curve[:,2], 'red',label='original')
+	ax.scatter3D(curve[act_breakpoints,0], curve[act_breakpoints,1],curve[act_breakpoints,2], 'blue')
+	#plot execution curve
+	ax.plot3D(curve_exe[:,0], curve_exe[:,1],curve_exe[:,2], 'green',label='execution')
+	ax.plot3D(curve_blend[:,0], curve_blend[:,1],curve_blend[:,2], 'blue',label='blended')
+	plt.legend()
+	plt.show()
+
+def main():
+	robot=abb6640(d=50)
+	data_set='movel_30_car/'
+
+	data = read_csv('data/'+data_set+'command.csv')
+	breakpoints=np.array(data['breakpoints'].tolist())
+	act_breakpoints=copy.deepcopy(breakpoints)
+	act_breakpoints[1:]=act_breakpoints[1:]-1
+
+	curve_js = read_csv('data/'+data_set+'Curve_js.csv',header=None).values
+	curve = read_csv('data/'+data_set+'Curve_in_base_frame.csv',header=None).values
+
+	data=read_csv('execution/'+data_set+'curve_exe_v500_z10.csv')
+	q1=data[' J1'].tolist()
+	q2=data[' J2'].tolist()
+	q3=data[' J3'].tolist()
+	q4=data[' J4'].tolist()
+	q5=data[' J5'].tolist()
+	q6=data[' J6'].tolist()
+	timestamp=np.array(data['timestamp'].tolist()).astype(float)
+	cmd_num=np.array(data[' cmd_num'].tolist()).astype(float)
+	start_idx=np.where(cmd_num==5)[0][0]
+	curve_exe_js=np.radians(np.vstack((q1,q2,q3,q4,q5,q6)).T.astype(float)[start_idx:])
+
+	act_speed=[]
+	lam_act=[0]
+	curve_exe=[]
+	for i in range(len(curve_exe_js)):
+		robot_pose=robot.fwd(curve_exe_js[i])
+		curve_exe.append(robot_pose.p)
+		if i>0:
+			lam_act.append(lam_act[-1]+np.linalg.norm(curve_exe[i]-curve_exe[i-1]))
+		try:
+			if timestamp[i-1]!=timestamp[i] and np.linalg.norm(curve_exe[-1]-curve_exe[-2])!=0:
+				act_speed.append(np.linalg.norm(curve_exe[-1]-curve_exe[-2])/(timestamp[i]-timestamp[i-1]))
+			else:
+				act_speed.append(act_speed[-1])
+				
+		except IndexError:
+			pass
 	curve_exe=np.array(curve_exe)
 
 	
 	lam=calc_lam_js(curve_js,robot)
+	lam_exe=calc_lam_cs(curve_exe)
 
 
-	curve_blend_js, spl_list, merged_idx=blend_js(curve_js,breakpoints,lam)
+	curve_blend_js=blend_js(curve_js,breakpoints,lam,50)
 	lamdot_blended=calc_lamdot(curve_blend_js,lam,robot,1)
 
 	curve_blend=[]
@@ -389,27 +446,48 @@ def main():
 
 
 	###plot curves
+	for i in range(6):
+		plt.figure(i)
+		plt.plot(lam,curve_js[:,i],label='original')
+		plt.plot(lam_exe,curve_exe_js[:,i],label='execution')
+		plt.plot(lam,curve_blend_js[:,i],label='Blended J')
+		plt.title('J'+str(i+1))
+		plt.legend()
+
+	###plot original curve
 	plt.figure()
-	# plt.title(s+' '+z)
 	ax = plt.axes(projection='3d')
 	ax.plot3D(curve[:,0], curve[:,1],curve[:,2], 'red',label='original')
 	ax.scatter3D(curve[act_breakpoints,0], curve[act_breakpoints,1],curve[act_breakpoints,2], 'blue')
 	#plot execution curve
 	ax.plot3D(curve_exe[:,0], curve_exe[:,1],curve_exe[:,2], 'green',label='execution')
-	#plot arb blended
 	ax.plot3D(curve_blend[:,0], curve_blend[:,1],curve_blend[:,2], 'blue',label='blended')
-	plt.legend()
 	plt.show()
+
 
 	##2d plot
+	###plane projection visualization
+	# A = np.array([curve[:,0], curve[:,1], np.ones(len(curve))]).T
+	# b = curve[:,2]
+	# c = np.linalg.lstsq(A,b,rcond=None)[0]
 
-	plt.figure()
-	plt.title('plannar view')
-	plt.plot(curve[:,0], curve[:,1], 'red',label='original')
-	plt.plot(curve_exe[:,0], curve_exe[:,1], 'green',label='execution')
-	plt.plot(curve_blend[:,0], curve_blend[:,1], 'blue',label='blended')
-	plt.legend()
-	plt.show()
+	# normal=np.array([c[0],c[1],-1])
+	# normal=normal/np.linalg.norm(normal)
+
+	# curve_2d = rodrigues_rot(curve[:,:3], normal, [0,0,1])
+	# curve_exe_2d=rodrigues_rot(curve_exe, normal, [0,0,1])
+	# curve_blend_2d=rodrigues_rot(curve_blend, normal, [0,0,1])
+
+	# plt.figure()
+	# ax = plt.axes(projection='3d')
+	# ax.plot3D(curve_2d[:,0], curve_2d[:,1],curve_2d[:,2], 'red',label='original')
+	# ax.scatter3D(curve_2d[act_breakpoints,0], curve_2d[act_breakpoints,1],curve_2d[act_breakpoints,2], 'blue')
+	# #plot execution curve
+	# ax.plot3D(curve_exe_2d[:,0], curve_exe_2d[:,1],curve_exe_2d[:,2], 'green',label='execution')
+	# #plot arb blended
+	# ax.plot3D(curve_blend_2d[:,0], curve_blend_2d[:,1],curve_blend_2d[:,2], 'blue',label='blended')
+	# plt.legend()
+	# plt.show()
 
 def main2():
 	robot=abb6640(d=50)
@@ -443,18 +521,18 @@ def main2():
 	lam_act=[0]
 	curve_exe=[]
 	for i in range(len(curve_exe_js)):
-	    robot_pose=robot.fwd(curve_exe_js[i])
-	    curve_exe.append(robot_pose.p)
-	    if i>0:
-	        lam_act.append(lam_act[-1]+np.linalg.norm(curve_exe[i]-curve_exe[i-1]))
-	    try:
-	        if timestamp[i-1]!=timestamp[i] and np.linalg.norm(curve_exe[-1]-curve_exe[-2])!=0:
-	            act_speed.append(np.linalg.norm(curve_exe[-1]-curve_exe[-2])/(timestamp[i]-timestamp[i-1]))
-	        else:
-	        	act_speed.append(act_speed[-1])
-	            
-	    except IndexError:
-	        pass
+		robot_pose=robot.fwd(curve_exe_js[i])
+		curve_exe.append(robot_pose.p)
+		if i>0:
+			lam_act.append(lam_act[-1]+np.linalg.norm(curve_exe[i]-curve_exe[i-1]))
+		try:
+			if timestamp[i-1]!=timestamp[i] and np.linalg.norm(curve_exe[-1]-curve_exe[-2])!=0:
+				act_speed.append(np.linalg.norm(curve_exe[-1]-curve_exe[-2])/(timestamp[i]-timestamp[i-1]))
+			else:
+				act_speed.append(act_speed[-1])
+				
+		except IndexError:
+			pass
 	curve_exe=np.array(curve_exe)
 
 	
@@ -527,16 +605,16 @@ def test_blending_with_primitives():
 	lam_act=[0]
 	curve_exe=[]
 	for i in range(len(curve_exe_js)):
-	    robot_pose=robot.fwd(curve_exe_js[i])
-	    curve_exe.append(robot_pose.p)
-	    if i>0:
-	        lam_act.append(lam_act[-1]+np.linalg.norm(curve_exe[i]-curve_exe[i-1]))
-	    try:
-	        if timestamp[-1]!=timestamp[-2]:
-	            act_speed.append(np.linalg.norm(curve_exe[-1]-curve_exe[-2])/timestep)
-	            
-	    except IndexError:
-	        pass
+		robot_pose=robot.fwd(curve_exe_js[i])
+		curve_exe.append(robot_pose.p)
+		if i>0:
+			lam_act.append(lam_act[-1]+np.linalg.norm(curve_exe[i]-curve_exe[i-1]))
+		try:
+			if timestamp[-1]!=timestamp[-2]:
+				act_speed.append(np.linalg.norm(curve_exe[-1]-curve_exe[-2])/timestep)
+				
+		except IndexError:
+			pass
 
 
 
@@ -563,4 +641,5 @@ def test_blending_with_primitives():
 	plt.show()
 
 if __name__ == '__main__':
+	# blend_exe()
 	main()

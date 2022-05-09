@@ -93,3 +93,16 @@ def visualize_curve(curve,stepsize=10):
 	ax.plot3D(curve[:,0], curve[:,1],curve[:,2], 'gray')
 
 	plt.show()
+
+def orientation_interp(R_init,R_end,steps):
+	curve_fit_R=[]
+	###find axis angle first
+	R_diff=np.dot(R_init.T,R_end)
+	k,theta=R2rot(R_diff)
+	for i in range(steps):
+		###linearly interpolate angle
+		angle=theta*i/(steps-1)
+		R=rot(k,angle)
+		curve_fit_R.append(np.dot(R_init,R))
+	curve_fit_R=np.array(curve_fit_R)
+	return curve_fit_R
