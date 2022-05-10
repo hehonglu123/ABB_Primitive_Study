@@ -1,7 +1,7 @@
 from general_robotics_toolbox import *
 import numpy as np
 import matplotlib.pyplot as plt
-
+from scipy.interpolate import interp1d
 
 def cross(v):
 	return np.array([[0,-v[-1],v[1]],
@@ -94,6 +94,24 @@ def visualize_curve(curve,stepsize=10):
 
 	plt.show()
 
+def linear_interp(x,y):
+	f=interp1d(x,y.T)
+	x_new=np.linspace(x[0],x[-1],len(x))
+	return x_new, f(x_new).T
+
+def moving_average(a, n=10) :
+    ret = np.cumsum(a, axis=0)
+    ret[n:] = ret[n:] - ret[:-n]
+    return ret[n - 1:] / n
+
+
+def lfilter(x, y):
+	x,y=linear_interp(x,y)
+	n=10
+	y1=moving_average(y,n)
+	y2=moving_average(np.flip(y,axis=0),n)
+	return x[int(n/2):-int(n/2)+1], (y1+np.flip(y2,axis=0))/2
+	
 def orientation_interp(R_init,R_end,steps):
 	curve_fit_R=[]
 	###find axis angle first

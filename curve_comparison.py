@@ -16,6 +16,7 @@ robot=abb6640(d=50)
 dataset='movelcl_30_car2'
 
 ###read in original curve
+curve_original=read_csv('data/movel_30_car/Curve_in_base_frame.csv',header=None).values
 curve = read_csv('data/'+dataset+'/Curve_in_base_frame.csv',header=None).values
 curve_js = read_csv('data/'+dataset+'/Curve_js.csv',header=None).values
 
@@ -25,10 +26,9 @@ breakpoints=np.array(data['breakpoints'].tolist())
 breakpoints[1:]=breakpoints[1:]-1
 
 
-data_dir='realrobot/'+dataset
+data_dir='execution/'+dataset
 speed={'v500':v500}
-# speed={'v50':v50,'v300':v300,'v500':v500,'v1000':v1000,'vmax':vmax}
-zone={'z20':z20,'z10':z10,'z1':z1}#,'z5':z5,'z1':z1,'fine':fine}
+zone={'z20':z20,'z10':z10,'z1':z1}
 for s in speed:
 	for z in zone:
 		###read in recorded joint data
@@ -70,12 +70,14 @@ for s in speed:
 		ax.plot3D(curve_exe[:,0], curve_exe[:,1],curve_exe[:,2], 'green',label='execution')
 		
 
-		error,angle_error=calc_all_error_w_normal(curve_exe,curve[:,:3],curve_exe_R[:,:,-1],curve[:,3:])
+		error1,angle_error1=calc_all_error_w_normal(curve_exe,curve[:,:3],curve_exe_R[:,:,-1],curve[:,3:])
+		error2,angle_error2=calc_all_error_w_normal(curve_exe,curve_original[:,:3],curve_exe_R[:,:,-1],curve_original[:,3:])
 		fig, ax1 = plt.subplots()
 		ax2 = ax1.twinx()
 		ax1.plot(lam[1:],act_speed, 'g-', label='Speed')
-		ax2.plot(lam, error, 'b-',label='Cartesian Error')
-		ax2.plot(lam, np.degrees(angle_error), 'y-',label='Normal Error')
+		ax2.plot(lam, error1, 'b-',label='Cartesian Error (LCL)')
+		ax2.plot(lam, error2, 'r-',label='Cartesian Error (LL)')
+		ax2.plot(lam, np.degrees(angle_error1), 'y-',label='Normal Error')
 		ax1.legend(loc=0)
 		ax2.legend(loc=0)
 		ax1.set_xlabel('lambda (mm)')

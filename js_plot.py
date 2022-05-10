@@ -18,6 +18,7 @@ dataset='movel_30_car'
 ###read in original curve
 curve_js = read_csv('data/'+dataset+'/Curve_js.csv',header=None).values
 curve_js_ljl = read_csv('data/moveljl_30_car/Curve_js.csv',header=None).values
+curve_js_lcl = read_csv('data/movelcl_30_car2/Curve_js.csv',header=None).values
 
 
 ###get breakpoints location
@@ -54,7 +55,7 @@ for s in speed:
 			plt.figure(i)
 			plt.plot(lam1,curve_js[:,i],label='original')
 			plt.plot(lam2,curve_exe_js[:,i],label='execution')
-			plt.plot(lam1,curve_js_ljl[:,i],label='linear J')
+			plt.plot(lam1,curve_js_lcl[:,i],label='Circular')
 			plt.legend()
 
 			plt.title('J'+str(i+1)+' '+s+' '+z)

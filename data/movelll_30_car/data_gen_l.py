@@ -77,7 +77,7 @@ curve_js=np.array(curve_js)
 R_all=np.array(R_all)
 
 ####movel insertion
-N=201
+N=801
 
 start_idx=bp_idx-int(np.floor(N/2))
 end_idx=bp_idx+int(np.floor(N/2))
