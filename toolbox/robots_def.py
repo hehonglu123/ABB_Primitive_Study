@@ -265,7 +265,7 @@ def jdot(q,qdot):
 
 def main():
 	robot=abb6640(d=50)
-	inv_sol=robot.inv([2200,500, 1000],Ry(np.radians(135)))
+	inv_sol=robot.inv([1700,500, 1000],Ry(np.radians(135)))
 	print(inv_sol)
 	print(np.degrees(inv_sol[1]))
 	return

@@ -13,7 +13,8 @@ from utils import *
 
 robot=abb6640(d=50)
 
-dataset='movelll_30_car'
+dataset='movel_30_car'
+z500 = zonedata(False,500,300,300,30,300,30)
 
 ###read in original curve
 curve = read_csv('data/'+dataset+'/Curve_in_base_frame.csv',header=None).values
@@ -28,7 +29,7 @@ breakpoints[1:]=breakpoints[1:]-1
 data_dir='execution/'+dataset
 speed={'v500':v500}
 # speed={'v50':v50,'v300':v300,'v500':v500,'v1000':v1000,'vmax':vmax}
-zone={'z20':z20,'z10':z10,'z1':z1}#,'z5':z5,'z1':z1,'fine':fine}
+zone={'z10':z10}#,'z10':z10,'z1':z1}#,'z5':z5,'z1':z1,'fine':fine}
 for s in speed:
 	for z in zone:
 		###read in recorded joint data

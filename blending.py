@@ -276,7 +276,7 @@ def blend_js_from_primitive(q,curve,breakpoints,lam,primitives,robot,N=10):
 
 	return lam_blended,q_blended
 
-def blend_js(q,breakpoints,lam,blending_num=100):
+def blend_js(q,breakpoints,lam,bp_exe_start_idx,bp_exe_end_idx):
 	#q: 			full 50,000 joints
 	#breakpoints:	breakpoints
 	#lam: 			path length
@@ -295,10 +295,10 @@ def blend_js(q,breakpoints,lam,blending_num=100):
 
 		merged_idx.append([breakpoints[i]])
 
-		start_idx	=breakpoints[i]-blending_num
-		end_idx	=breakpoints[i]+blending_num
+		start_idx	=bp_exe_start_idx
+		end_idx	=bp_exe_end_idx
 
-		if i+1<len(breakpoints):
+		if i+1<len(breakpoints)-1:
 			if breakpoints[i+1]-breakpoints[i]<2*blending_num:
 				skip=True
 				start_idx	=breakpoints[i]-blending_num
@@ -314,6 +314,10 @@ def blend_js(q,breakpoints,lam,blending_num=100):
 def blend_exe():
 	robot=abb6640(d=50)
 	data_set='movel_30_car/'
+	zone=100
+
+	###maxium blending in RobotStudio, higher than that will result in similar behavior of z100
+	z_max=min(zone,150)
 
 	data = read_csv('data/'+data_set+'command.csv')
 	breakpoints=np.array(data['breakpoints'].tolist())
@@ -326,7 +330,7 @@ def blend_exe():
 
 
 
-	data=read_csv('execution/'+data_set+'curve_exe_v500_z10.csv')
+	data=read_csv('execution/'+data_set+'curve_exe_v500_z'+str(zone)+'.csv')
 	q1=data[' J1'].tolist()
 	q2=data[' J2'].tolist()
 	q3=data[' J3'].tolist()
@@ -359,9 +363,19 @@ def blend_exe():
 	lam=calc_lam_js(curve_js,robot)
 	lam_exe=calc_lam_cs(curve_exe)
 
-	bp_exe=np.argmin(np.abs(lam_exe-lam[breakpoints[1]]))
+	bp_exe=np.argmin(np.linalg.norm(curve_exe-curve[breakpoints[1]][:3],axis=1))
 
-	curve_blend_js=blend_js(curve_exe_js,[0,bp_exe,len(curve_exe_js)],lam_exe,4)
+	# z_max+=30
+	bp_start_idx=np.argmin(np.abs(lam-(lam[breakpoints[1]]-z_max)))
+	bp_end_idx=np.argmin(np.abs(lam-(lam[breakpoints[1]]+z_max)))
+
+	bp_exe_start_idx=np.argmin(np.linalg.norm(curve_exe-curve[bp_start_idx,:3],axis=1))
+	bp_exe_end_idx=np.argmin(np.linalg.norm(curve_exe-curve[bp_end_idx,:3],axis=1))
+
+
+	blending_points=[bp_exe_start_idx,bp_exe_end_idx]
+
+	curve_blend_js=blend_js(curve_exe_js,[0,bp_exe,len(curve_exe_js)],lam_exe,bp_exe_start_idx,bp_exe_end_idx)
 
 	curve_blend=[]
 	for i in range(len(curve_blend_js)):
@@ -383,15 +397,17 @@ def blend_exe():
 	ax = plt.axes(projection='3d')
 	ax.plot3D(curve[:,0], curve[:,1],curve[:,2], 'red',label='original')
 	ax.scatter3D(curve[act_breakpoints,0], curve[act_breakpoints,1],curve[act_breakpoints,2], 'blue')
+	ax.scatter3D(curve_exe[blending_points,0], curve_exe[blending_points,1],curve_exe[blending_points,2], 'red')
 	#plot execution curve
 	ax.plot3D(curve_exe[:,0], curve_exe[:,1],curve_exe[:,2], 'green',label='execution')
 	ax.plot3D(curve_blend[:,0], curve_blend[:,1],curve_blend[:,2], 'blue',label='blended')
 	plt.legend()
+	plt.title('Zone '+str(zone))
 	plt.show()
 
 def main():
 	robot=abb6640(d=50)
-	data_set='movel_30_car/'
+	data_set='movel_30_ori/'
 
 	data = read_csv('data/'+data_set+'command.csv')
 	breakpoints=np.array(data['breakpoints'].tolist())
@@ -641,5 +657,5 @@ def test_blending_with_primitives():
 	plt.show()
 
 if __name__ == '__main__':
-	# blend_exe()
-	main()
+	blend_exe()
+	# main()
