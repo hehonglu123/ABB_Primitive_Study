@@ -22,12 +22,20 @@ def search_func(alpha,qdot,q_all,curve):
 	return np.sum(np.linalg.norm(pose_all.reshape(len(curve),6)-curve,axis=1))
 
 
-# def barrier(x):
-# 	a=1;b=-1;e=0.5;l=5;
-# 	return -np.divide(a*b*(x-e),l+b*(x-e))
-def barrier(x):
-	a=1;b=-1;e=0.5;l=5;
+
+def barrier1(x):
+	a=10;b=-1;e=0.5;l=5;
 	return -np.divide(a*b*(x-e),l)
+
+def barrier2(x):
+	a=10;b=-1;e=0.1;l=5;
+	return -np.divide(a*b*(x-e),l)
+
+live=False
+if live:
+	plt.ion()
+	fig = plt.figure(figsize=(12,8))
+	ax = fig.add_subplot(111, projection='3d')
 
 robot=abb6640(d=50)
 data_set='movel_30_car/'
@@ -52,13 +60,16 @@ num_joints=len(curve_js[0])
 N=len(curve_js)
 
 ###get jacobian for all points
-J_all=[]
+Jp_all=[]
+JR_all=[]
 for i in range(N):
 	R_cur=robot.fwd(curve_js[i]).R
-	J_all.append(robot.jacobian(curve_js[i]))
+	J=robot.jacobian(curve_js[i])
+	Jp_all.append(J[3:])
 	#modify jacobian here
-	J_all[-1][:3,:]=-np.dot(hat(R_cur[:,-1]),J_all[-1][:3,:])
-J_all=np.array(J_all)
+	JR_all.append(-hat(R_cur[:,-1])@J[:3])
+Jp_all=np.array(Jp_all)
+JR_all=np.array(JR_all)
 
 D1=np.zeros((num_joints*(N-1),num_joints*N))
 D1[:num_joints*(N-1),:num_joints*(N-1)]=np.eye(num_joints*(N-1))
@@ -71,31 +82,30 @@ pose_all=curve.flatten()
 
 #qp parameters
 H=D1.T@D1 + D2.T@D2
-H += 0.01*np.eye(len(H))	#posdef
+H += 0.001*np.eye(len(H))
 lb=-np.ones(num_joints*len(curve_js))
 ub=np.ones(num_joints*len(curve_js))
-for i in range(49):
+for i in range(50):
 
 	#qp formation	
 	f=(H@q_all).T
 	###path constraint
 	diff=curve-pose_all.reshape(N,num_joints)
-	distance=np.linalg.norm(diff[:,:3],axis=1)+10*np.linalg.norm(diff[:,3:],axis=1)
+	distance_p=np.linalg.norm(diff[:,:3],axis=1)
+	distance_R=np.linalg.norm(diff[:,3:],axis=1)
 
-	G=np.zeros((N,num_joints*N))
-
+	G1=np.zeros((N,num_joints*N))	#position
+	G2=np.zeros((N,num_joints*N))	#normal
 	for j in range(N):
-		diff_temp=copy.deepcopy(diff[j])
-		diff_temp[:3]=diff_temp[:3]/np.linalg.norm(diff_temp[:3])
-		diff_temp[3:]=diff_temp[3:]/np.linalg.norm(diff_temp[3:])
-		#orientation on top, pos on bottom in jac
-		diff_temp=np.array([diff_temp[3:],diff_temp[:3]]).flatten()
-		G[j,6*j:6*(j+1)]=diff_temp@J_all[j]
-	
+		G1[j,6*j:6*(j+1)]=(diff[j][:3]/np.linalg.norm(diff[j][:3]))@Jp_all[j]
+		G2[j,6*j:6*(j+1)]=(diff[j][3:]/np.linalg.norm(diff[j][3:]))@JR_all[j]
 
+	h1=barrier1(distance_p)
+	h2=barrier2(distance_R)
+	h=np.hstack((h1,h2))
+	G=np.vstack((G1,G2))
 
-	h=barrier(distance)
-	print(diff[-1])
+	# print(h1[-1])
 
 	if np.linalg.norm(G)==0:
 		dq=solve_qp(H,f,lb=0.00001*lb,ub=0.00001*ub)
@@ -113,19 +123,32 @@ for i in range(49):
 	# print('lam_j: ',np.sum(np.linalg.norm(np.diff(q_all.reshape((N,num_joints)),axis=0),axis=1)))
 
 	#verify constraint
-	# print(J_all[-1]@dq[-6:])
+	# print('act',(diff[-1,:3]/np.linalg.norm(diff[-1,:3]))@Jp_all[-1]@dq[-6:],h1[-1])
 
-	J_all=[]
+	Jp_all=[]
+	JR_all=[]
 
 	for j in range(N):
-		pose_temp=robot.fwd(q_all[6*j:6*(j+1)])
+		q_cur=q_all[6*j:6*(j+1)]
+		pose_temp=robot.fwd(q_cur)
 		pose_all[num_joints*j:num_joints*j+3]=pose_temp.p
 		pose_all[num_joints*j+3:num_joints*j+6]=pose_temp.R[:,-1]
 
-		J_all.append(robot.jacobian(q_all[6*j:6*(j+1)]))
+		J=robot.jacobian(q_cur)
+		Jp_all.append(J[3:])
 		#modify jacobian here
-		J_all[-1][:3,:]=-np.dot(hat(pose_temp.R[:,-1]),J_all[-1][:3,:])
-	J_all=np.array(J_all)
+		JR_all.append(-hat(pose_temp.R[:,-1])@J[:3])
+		
+	Jp_all=np.array(Jp_all)
+	JR_all=np.array(JR_all)
+
+	if live:
+		plt.pause(0.001)
+		ax = plt.axes(projection='3d')
+		ax.plot3D(curve[:,0], curve[:,1],curve[:,2], 'red',label='original')
+		ax.plot3D(pose_all[0::6], pose_all[1::6],pose_all[2::6], 'gray',label='output')
+		plt.legend()
+		plt.draw()
 
 plt.figure()
 ax = plt.axes(projection='3d')
