@@ -4,7 +4,7 @@ from pandas import *
 import sys
 # sys.path.append('../abb_motion_program_exec')
 from abb_motion_program_exec_client import *
-sys.path.append('toolbox')
+sys.path.append('../toolbox')
 from robots_def import *
 from error_check import *
 from lambda_calc import *
@@ -12,29 +12,37 @@ from utils import *
 
 
 robot=abb6640(d=50)
-
+data_dir='../data/'
 dataset='movel_30_car'
-z500 = zonedata(False,500,300,300,30,300,30)
 
 ###read in original curve
-curve = read_csv('data/'+dataset+'/Curve_in_base_frame.csv',header=None).values
-curve_js = read_csv('data/'+dataset+'/Curve_js.csv',header=None).values
+curve = read_csv(data_dir+dataset+'/Curve_in_base_frame.csv',header=None).values
+curve_js = read_csv(data_dir+dataset+'/Curve_js.csv',header=None).values
+
+###read in optimized curve
+curve_qp_js = read_csv('output/Curve_js_qp2.csv',header=None).values
+curve_qp=[]
+for i in range(len(curve_qp_js)):
+	curve_qp.append(robot.fwd(curve_qp_js[i]).p)
+curve_qp=np.array(curve_qp)
+
+lam_qp=calc_lam_cs(curve_qp)
+lamdot_qp=calc_lamdot(curve_qp_js,lam_qp,robot,step=1)
+
 
 ###get breakpoints location
-data = read_csv('data/'+dataset+'/command.csv')
+data = read_csv(data_dir+dataset+'/command.csv')
 breakpoints=np.array(data['breakpoints'].tolist())
 breakpoints[1:]=breakpoints[1:]-1
 
 
-data_dir='execution/'+dataset
-# data_dir='execution/qp_opt/'
-speed={'v1000':v1000}
-# speed={'v50':v50,'v300':v300,'v500':v500,'v1000':v1000,'vmax':vmax}
-zone={'z10':z10}#,'z10':z10,'z1':z1}#,'z5':z5,'z1':z1,'fine':fine}
+output_dir='../execution/qp_opt/'
+speed=['vmax']
+zone=['z10']
 for s in speed:
 	for z in zone:
 		###read in recorded joint data
-		data=read_csv(data_dir+'/curve_exe_'+s+'_'+z+'.csv')
+		data=read_csv(output_dir+'curve_exe_'+s+'_'+z+'.csv')
 		q1=data[' J1'].tolist()
 		q2=data[' J2'].tolist()
 		q3=data[' J3'].tolist()
@@ -67,25 +75,19 @@ for s in speed:
 		plt.figure()
 		plt.title(s+' '+z)
 		ax = plt.axes(projection='3d')
-		ax.plot3D(curve[:,0], curve[:,1],curve[:,2], 'red',label='original')
+		ax.plot3D(curve[:,0], curve[:,1],curve[:,2], 'red',label='Original')
+		ax.plot3D(curve_qp[:,0], curve_qp[:,1],curve_qp[:,2], 'gray',label='QP Output Curve')
 		ax.scatter3D(curve[breakpoints,0], curve[breakpoints,1],curve[breakpoints,2], 'blue')
 		#plot execution curve
-		ax.plot3D(curve_exe[:,0], curve_exe[:,1],curve_exe[:,2], 'green',label='execution')
+		ax.plot3D(curve_exe[:,0], curve_exe[:,1],curve_exe[:,2], 'green',label='Execution')
 		
+		plt.figure()
+		plt.plot(lam[1:],act_speed, 'g-', label='Execution Speed')
+		plt.plot(lam_qp,lamdot_qp,'r-',label='Lamdot from QP Output')
+		plt.xlabel('Path Length-lambda (mm)')
+		plt.ylabel('Speed/Lamdadot (mm/s)')
+		plt.legend()
 
-		error,angle_error=calc_all_error_w_normal(curve_exe,curve[:,:3],curve_exe_R[:,:,-1],curve[:,3:])
-		fig, ax1 = plt.subplots()
-		ax2 = ax1.twinx()
-		ax1.plot(lam[1:],act_speed, 'g-', label='Speed')
-		ax2.plot(lam, error, 'b-',label='Cartesian Error')
-		ax2.plot(lam, np.degrees(angle_error), 'y-',label='Normal Error')
-		ax1.legend(loc=0)
-		ax2.legend(loc=0)
-		ax1.set_xlabel('lambda (mm)')
-		ax1.set_ylabel('Speed/lamdot (mm/s)', color='g')
-		ax2.set_ylabel('Error (mm/deg)', color='b')
-		ax2.set_ylim(0,1)
-
-		plt.title(dataset+' error vs lambda'+' '+s+' '+z)
+		# plt.title(dataset+' error vs lambda'+' '+s+' '+z)
 		plt.show()
 		

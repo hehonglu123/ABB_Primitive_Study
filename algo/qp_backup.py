@@ -31,7 +31,7 @@ def barrier2(x):
 	a=10;b=-1;e=0.1;l=5;
 	return -np.divide(a*b*(x-e),l)
 
-live=False
+live=True
 if live:
 	plt.ion()
 	fig = plt.figure(figsize=(12,8))
@@ -40,12 +40,7 @@ if live:
 robot=abb6640(d=50)
 data_set='movel_30_car/'
 data_dir='../data/'
-zone=1
 
-data = read_csv(data_dir+data_set+'command.csv')
-breakpoints=np.array(data['breakpoints'].tolist())
-act_breakpoints=copy.deepcopy(breakpoints)
-act_breakpoints[1:]=act_breakpoints[1:]-1
 
 curve_js = read_csv(data_dir+data_set+'Curve_js.csv',header=None).values
 curve = read_csv(data_dir+data_set+'Curve_in_base_frame.csv',header=None).values
