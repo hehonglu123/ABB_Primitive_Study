@@ -22,7 +22,9 @@ def search_func(alpha,qdot,q_all,curve):
 	return np.sum(np.linalg.norm(pose_all.reshape(len(curve),6)-curve,axis=1))
 
 
-
+def barrier1_temp(x):
+	a=0.2;b=0;c=-0.05
+	return a*np.square(x)+b*x+c
 def barrier1(x):
 	a=10;b=-1;e=0.5;l=5;
 	return -np.divide(a*b*(x-e),l)
@@ -31,7 +33,7 @@ def barrier2(x):
 	a=10;b=-1;e=0.1;l=5;
 	return -np.divide(a*b*(x-e),l)
 
-live=True
+live=False
 if live:
 	plt.ion()
 	fig = plt.figure(figsize=(12,8))
@@ -80,7 +82,7 @@ H=D1.T@D1 + D2.T@D2
 H += 0.001*np.eye(len(H))
 lb=-np.ones(num_joints*len(curve_js))
 ub=np.ones(num_joints*len(curve_js))
-for i in range(50):
+for i in range(100):
 
 	#qp formation	
 	f=(H@q_all).T
@@ -95,21 +97,21 @@ for i in range(50):
 		G1[j,6*j:6*(j+1)]=(diff[j][:3]/np.linalg.norm(diff[j][:3]))@Jp_all[j]
 		G2[j,6*j:6*(j+1)]=(diff[j][3:]/np.linalg.norm(diff[j][3:]))@JR_all[j]
 
-	h1=barrier1(distance_p)
+	h1=barrier1_temp(distance_p)
 	h2=barrier2(distance_R)
 	h=np.hstack((h1,h2))
 	G=np.vstack((G1,G2))
 
-	# print(h1[-1])
+	print(h1[-1])
 
 	if np.linalg.norm(G)==0:
 		dq=solve_qp(H,f,lb=0.00001*lb,ub=0.00001*ub)
 		alpha=1
 		# print(dq)
 	else:
-		dq=solve_qp(H,f,G=-G,h=-h)#,lb=0.1*lb,ub=0.1*ub)
+		dq=solve_qp(H,f,G=-G,h=-h,lb=0.0001*lb,ub=0.0001*ub)
 		# alpha=fminbound(search_func,0,1,args=(dq,q_all,curve,))
-		alpha=0.01
+		alpha=1
 		# print(alpha)
 
 	#update curve
@@ -119,6 +121,7 @@ for i in range(50):
 
 	#verify constraint
 	# print('act',(diff[-1,:3]/np.linalg.norm(diff[-1,:3]))@Jp_all[-1]@dq[-6:],h1[-1])
+	print(diff[-1,:3],Jp_all[-1]@dq[-6:])
 
 	Jp_all=[]
 	JR_all=[]

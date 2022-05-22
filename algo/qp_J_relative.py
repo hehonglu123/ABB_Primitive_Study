@@ -27,9 +27,23 @@ def barrier1(x):
 	a=10;b=-1;e=0.5;l=5;
 	return -np.divide(a*b*(x-e),l)
 
+def barrier1_temp(x):
+	a=0.2;b=0;c=-0.05
+	return a*np.square(x)+b*x+c
+
 def barrier2(x):
 	a=10;b=-1;e=0.1;l=5;
 	return -np.divide(a*b*(x-e),l)
+
+def form_path_global(q_init,curve_relative):
+	pose_init=robot.fwd(q_init)
+	R_init=pose_init.R
+	p_init=pose_init.p
+	curve_global=[]
+	for i in range(len(curve_relative)):
+		curve_global.append(R_init@curve_relative[i,:3]+p_init)
+
+	return np.array(curve_global)
 
 def calc_relative_path(curve_js):
 	###convert curve to initial tool frame
@@ -104,7 +118,7 @@ H=D1.T@D1 + D2.T@D2
 H += 0.001*np.eye(len(H))
 lb=-np.ones(num_joints*len(curve_js))
 ub=np.ones(num_joints*len(curve_js))
-for i in range(500):
+for i in range(100):
 
 	#qp formation	
 	f=(H@q_all).T
@@ -125,32 +139,32 @@ for i in range(500):
 	G2[0,0:6]=(diff_init_norm/np.linalg.norm(diff_init_norm))@JR_init_last
 
 	###concatenate constraints
-	h1=barrier1(np.hstack((diff_init_p,distance_p[3:])))
+	h1=barrier1_temp(np.hstack((diff_init_p,distance_p[3:])))
 	h2=barrier2(np.hstack((diff_init_norm,distance_R[3:])))
 	h=np.hstack((h1,h2))
 	G=np.vstack((G1,G2))
 
-	# print(h1[-1])
+	# print(diff[-1,:3],h1[-1])
 
 	if np.linalg.norm(diff)==0:
 		dq=solve_qp(H,f,lb=0.00001*lb,ub=0.00001*ub)
 		alpha=1
 
 	else:
-		dq=solve_qp(H,f,G=-G,h=-h)
+		dq=solve_qp(H,f,G=-G,h=-h,lb=0.000001*lb,ub=0.000001*ub)
 		# alpha=fminbound(search_func,0,1,args=(dq,q_all,curve,))
-		alpha=0.001
+		alpha=1
 		# print(alpha)
 
 
+	Jp_temp=robot.jacobian(q_all[-6:])[3:]
 	#update curve
 	q_all+=alpha*dq
 
-	###calculate lam_j
-	# print('lam_j: ',np.sum(np.linalg.norm(np.diff(q_all.reshape((N,num_joints)),axis=0),axis=1)))
 
 	#verify constraint
 	# print('act',(diff[-1,:3]/np.linalg.norm(diff[-1,:3]))@Jp_all[-1]@dq[-6:],h1[-1])
+	print(Jp_temp@dq[-6:])
 
 	curve_new,curve_normal_new,Jp_all,JR_all,curve_in_base_frame,p_init_last,norm_init_last,Jp_init_last,JR_init_last=calc_relative_path(q_all.reshape((N,num_joints)))
 	pose_all=np.hstack((curve_new,curve_normal_new)).flatten()
@@ -163,9 +177,11 @@ for i in range(500):
 		plt.legend()
 		plt.draw()
 
+curve_relative_in_base_frame=form_path_global(q_all[:6],curve_relative)
+
 plt.figure()
 ax = plt.axes(projection='3d')
-ax.plot3D(curve[:,0], curve[:,1],curve[:,2], 'red',label='original')
+ax.plot3D(curve_relative_in_base_frame[:,0], curve_relative_in_base_frame[:,1],curve_relative_in_base_frame[:,2], 'red',label='original')
 ax.plot3D(curve_in_base_frame[:,0], curve_in_base_frame[:,1],curve_in_base_frame[:,2], 'gray',label='output')
 plt.legend()
 plt.show()
